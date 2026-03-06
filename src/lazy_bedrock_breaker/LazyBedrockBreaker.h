@@ -2,14 +2,14 @@
 
 #include "ll/api/mod/NativeMod.h"
 
-namespace my_mod {
+namespace lazy_bedrock_breaker {
 
-class MyMod {
+class LazyBedrockBreaker {
 
 public:
-    static MyMod& getInstance();
+    static LazyBedrockBreaker& getInstance();
 
-    MyMod() : mSelf(*ll::mod::NativeMod::current()) {}
+    LazyBedrockBreaker() : mSelf(*ll::mod::NativeMod::current()) {}
 
     [[nodiscard]] ll::mod::NativeMod& getSelf() const { return mSelf; }
 
@@ -23,11 +23,11 @@ public:
     bool disable();
 
     // TODO: Implement this method if you need to unload the mod.
-    // /// @return True if the mod is unloaded successfully.
-    // bool unload();
+    /// @return True if the mod is unloaded successfully.
+    bool unload();
 
 private:
     ll::mod::NativeMod& mSelf;
 };
 
-} // namespace my_mod
+} // namespace lazy_bedrock_breaker

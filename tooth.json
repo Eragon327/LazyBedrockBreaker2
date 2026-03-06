@@ -1,51 +1,39 @@
 {
     "format_version": 3,
     "format_uuid": "289f771f-2c9a-4d73-9f3f-8492495a924d",
-    "tooth": "example.com/my-user/my-mod",
-    "version": "0.0.0",
+    "tooth": "https://github.com/Eragon327/LazyBedrockBreaker2",
+    "version": "1.0.0",
     "info": {
-        "name": "My Mod",
-        "description": "Description of my mod",
+        "name": "LazyBedrockBreaker",
+        "description": "A bedrock breaker helper for Minecraft Bedrock Edition",
         "tags": [
             "platform:levilamina",
             "type:mod"
         ],
-        "avatar_url": "https://example.com/my-mod/avatar.png"
+        "avatar_url": ""
     },
     "variants": [
         {
-            "label": "",
+            "label": "server",
             "platform": "win-x64",
             "dependencies": {
-                "github.com/LiteLDev/LeviLamina": "Required LeviLamina version range"
+                "github.com/LiteLDev/LeviLamina": "1.4.*"
             },
             "assets": [
                 {
                     "type": "zip",
                     "urls": [
-                        "https://example.com/my-mod/assets.zip"
+                        "https://github.com/Eragon327/LazyBedrockBreaker2/releases/download/v1.0.0/LazyBedrockBreaker.zip"
                     ],
                     "placements": [
                         {
                             "type": "dir",
-                            "src": "my-mod/",
-                            "dest": "plugins/my-mod/"
+                            "src": "LazyBedrockBreaker/",
+                            "dest": "plugins/LazyBedrockBreaker/"
                         }
                     ]
                 }
-            ],
-            "preserve_files": [],
-            "remove_files": [],
-            "scripts": {
-                "pre_install": [],
-                "install": [],
-                "post_install": [],
-                "pre_pack": [],
-                "post_pack": [],
-                "pre_uninstall": [],
-                "uninstall": [],
-                "post_uninstall": []
-            }
+            ]
         }
     ]
 }
