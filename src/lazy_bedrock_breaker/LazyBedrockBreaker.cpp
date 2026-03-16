@@ -1,17 +1,12 @@
 #include "LazyBedrockBreaker.h"
 #include "commands/Commands.h"
-#include "base/Utils.h"
 #include "base/Mod.h"
+#include "base/Core.h"
 #include "ll/api/mod/RegisterHelper.h"
 #include "ll/api/memory/Hook.h"
 #include "ll/api/event/EventBus.h"
 #include "ll/api/event/player/PlayerPlaceBlockEvent.h"
-#include "mc/world/actor/player/Player.h"
 #include "mc/world/level/Level.h"
-#include "mc/world/level/BlockPos.h"
-#include "mc/world/level/block/Block.h"
-#include "mc/world/level/BlockSource.h"
-#include <unordered_map>
 
 
 namespace lazy_bedrock_breaker {
@@ -19,7 +14,6 @@ namespace lazy_bedrock_breaker {
 namespace {
 ll::event::ListenerPtr playerPlacingBlockEventListener;
 ll::event::ListenerPtr playerPlacedBlockEventListener;
-std::unordered_map<std::string, BlockPos> playerClickedPositions; // Map to store clicked block positions for each player.
 }
 
 LazyBedrockBreaker& LazyBedrockBreaker::getInstance() {
@@ -59,31 +53,13 @@ bool LazyBedrockBreaker::enable() {
     ll::event::EventBus& eventBus = ll::event::EventBus::getInstance();
 
     playerPlacingBlockEventListener =
-        eventBus.emplaceListener<ll::event::PlayerPlacingBlockEvent>([](ll::event::PlayerPlacingBlockEvent& event) {
-            if (!lazy_bedrock_breaker::mod().getPlayerDb()->get("function_enabled")) return;
-
-            Player& player = event.self();
-            const mce::UUID& uuid = player.getUuid();
-            if(!lazy_bedrock_breaker::mod().getPlayerDb()->get(uuid.asString())) return;
-
-            const BlockPos& pos = event.pos();
-            const Block&    block = player.getDimensionBlockSource().getBlock(pos);
-            std::string     typeName = block.getTypeName();
-
-            if(lazy_bedrock_breaker::arr().has(typeName)) {
-                playerClickedPositions[uuid.asString()] = pos;
-            }
-    });
+        eventBus.emplaceListener<ll::event::PlayerPlacingBlockEvent>([](ll::event::PlayerPlacingBlockEvent &event) {
+            onPlayerPlacingBlock(event);
+        });
 
     playerPlacedBlockEventListener =
         eventBus.emplaceListener<ll::event::PlayerPlacedBlockEvent>([](ll::event::PlayerPlacedBlockEvent& event) {
-            if (!lazy_bedrock_breaker::mod().getPlayerDb()->get("function_enabled")) return;
-            
-            Player& player = event.self();
-            const mce::UUID& uuid = player.getUuid();
-            if(!lazy_bedrock_breaker::mod().getPlayerDb()->get(uuid.asString())) return;
-
-
+            afterPlayerPlacedBlock(event);
         });
 
     return true;
@@ -109,7 +85,7 @@ bool LazyBedrockBreaker::unload() {
 
 LL_AUTO_TYPE_INSTANCE_HOOK(TickHook, HookPriority::Normal, Level, &Level::$tick, void) {
     origin();
-    playerClickedPositions.clear();
+    clearMap();
 }
 
 } // namespace lazy_bedrock_breaker
