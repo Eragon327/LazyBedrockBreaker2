@@ -2,11 +2,14 @@
 #include "commands/Commands.h"
 #include "base/Mod.h"
 #include "base/Core.h"
+#include "base/Task.h"
 #include "ll/api/mod/RegisterHelper.h"
 #include "ll/api/memory/Hook.h"
 #include "ll/api/event/EventBus.h"
 #include "ll/api/event/player/PlayerPlaceBlockEvent.h"
 #include "mc/world/level/Level.h"
+
+#include "mc/entity/systems/ActorLegacyTickSystem.h"
 
 
 namespace lazy_bedrock_breaker {
@@ -14,7 +17,7 @@ namespace lazy_bedrock_breaker {
 namespace {
 ll::event::ListenerPtr playerPlacingBlockEventListener;
 ll::event::ListenerPtr playerPlacedBlockEventListener;
-}
+} // namespace
 
 LazyBedrockBreaker& LazyBedrockBreaker::getInstance() {
     static LazyBedrockBreaker instance;
@@ -22,9 +25,6 @@ LazyBedrockBreaker& LazyBedrockBreaker::getInstance() {
 }
 
 bool LazyBedrockBreaker::load() {
-    getSelf().getLogger().debug("Loading...");
-    // Code for loading the mod goes here.
-
     // Initialize the player database.
     const std::filesystem::path& playerDbPath = getSelf().getDataDir() / "players";
     lazy_bedrock_breaker::mod().getPlayerDb() = std::make_unique<ll::data::KeyValueDB>(playerDbPath);
@@ -44,9 +44,6 @@ bool LazyBedrockBreaker::load() {
 }
 
 bool LazyBedrockBreaker::enable() {
-    getSelf().getLogger().debug("Enabling...");
-    // Code for enabling the mod goes here.
-
     commands::registerBedrockBreakerCommand();
     commands::registerBedrockBreakerMasterCommand();
 
@@ -77,14 +74,9 @@ bool LazyBedrockBreaker::disable() {
     return true;
 }
 
-bool LazyBedrockBreaker::unload() {
-    getSelf().getLogger().debug("Unloading...");
-    // Code for unloading the mod goes here.
-    return true;
-}
-
 LL_AUTO_TYPE_INSTANCE_HOOK(TickHook, HookPriority::Normal, Level, &Level::$tick, void) {
     origin();
+    TaskManager::tick(); // TaskManager是静态类
     clearMap();
 }
 
