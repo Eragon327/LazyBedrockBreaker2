@@ -7,6 +7,8 @@
 #include "mc/world/level/BlockPos.h"
 #include "mc/world/level/BlockSource.h"
 #include "mc/world/level/block/Block.h"
+#include "mc/world/level/dimension/Dimension.h"
+#include "mc/world/level/dimension/DimensionHeightRange.h"
 #include "mc/world/level/GameType.h"
 #include "mc/world/actor/player/Player.h"
 #include "mc/world/actor/player/PlayerInventory.h"
@@ -41,8 +43,11 @@ unsigned char handleDirection(unsigned char direction) {
 }
 
 std::optional<unsigned char> searchAvilablePistonFacingDirection(BlockSource& blockSource, const BlockPos& pos) {
+    DimensionHeightRange heightRange = blockSource.getDimension().mHeightRange;
     for (unsigned char i = 0; i < 6; i++) {
-        if (blockSource.getBlock(pos.relative(i, 1)).isAir()) {
+        BlockPos adjacentPos = pos.relative(i, 1);
+        if (adjacentPos.y < heightRange.mMin || adjacentPos.y >= heightRange.mMax) continue; // 超出世界高度范围
+        if (blockSource.getBlock(adjacentPos).isAir()) {
             return i; // Return the first available direction
         }
     }
@@ -55,9 +60,13 @@ std::optional<unsigned char> getPistonReady(BlockSource& blockSource, const Bloc
     if (!nbtTag.contains("states")) return std::nullopt;
     CompoundTagVariant states = nbtTag["states"];
     if (states.contains("facing_direction")) {
-        unsigned char direction = states["facing_direction"].get<IntTag>();
-        direction = handleDirection(direction);
-        if (blockSource.getBlock(pos.relative(direction, 1)).isAir()) return std::make_optional(direction);  // 无需旋转
+        DimensionHeightRange heightRange = blockSource.getDimension().mHeightRange;
+        unsigned char        direction   = states["facing_direction"].get<IntTag>();
+        direction                        = handleDirection(direction);
+        BlockPos facingPos               = pos.relative(direction, 1);
+        if (facingPos.y > heightRange.mMin && facingPos.y < heightRange.mMax && blockSource.getBlock(facingPos).isAir())
+            return std::make_optional(direction);
+        // 无需旋转
 
         std::optional<unsigned char> newDirection = searchAvilablePistonFacingDirection(blockSource, pos);
         if(!newDirection) return std::nullopt; // 没有可用的方向
@@ -84,9 +93,12 @@ std::optional<unsigned char> getRedStoneFromInventory(const Player& player) {
 }
 
 bool findRedStoneBlock(BlockSource& blockSource, const BlockPos& pos, unsigned char facing) {
+    DimensionHeightRange heightRange = blockSource.getDimension().mHeightRange;
     for (unsigned char i = 0; i < 6; i++) {
         if(i == facing) continue; // 跳过活塞朝向的那个位置
-        if (blockSource.getBlock(pos.relative(i, 1)).getTypeName() == "minecraft:redstone_block") {
+        BlockPos adjacentPos = pos.relative(i, 1);
+        if (adjacentPos.y < heightRange.mMin || adjacentPos.y >= heightRange.mMax) continue; // 超出世界高度范围
+        if (blockSource.getBlock(adjacentPos).getTypeName() == "minecraft:redstone_block") {
             return true; // Found a redstone block in the adjacent positions
         }
     }
@@ -94,9 +106,11 @@ bool findRedStoneBlock(BlockSource& blockSource, const BlockPos& pos, unsigned c
 }
 
 bool getRedStoneBlockReady(BlockSource& blockSource, const BlockPos& pos, unsigned char facing) {
+    DimensionHeightRange heightRange = blockSource.getDimension().mHeightRange;
     for (unsigned char i = 0; i < 6; i++) {
         if(i == facing) continue; // 跳过活塞朝向的那个位置
         BlockPos adjacentPos = pos.relative(i, 1);
+        if (adjacentPos.y < heightRange.mMin || adjacentPos.y >= heightRange.mMax) continue; // 超出世界高度范围
         if (blockSource.getBlock(adjacentPos).getTypeName() == "minecraft:air") {
             if (blockSource.setBlock(
                     adjacentPos,
@@ -129,8 +143,10 @@ void getReadyToBreak(BlockSource& blockSource, const BlockPos& pos, const Block&
 }
 
 void clearAllRedStoneNearby(BlockSource& blockSource, const BlockPos& pos, bool isDrop) {
+    DimensionHeightRange heightRange = blockSource.getDimension().mHeightRange;
     for (unsigned char i = 0; i < 6; i++) {
         BlockPos adjacentPos = pos.relative(i, 1);
+        if (adjacentPos.y < heightRange.mMin || adjacentPos.y >= heightRange.mMax) continue; // 超出世界高度范围
         if (blockSource.getBlock(adjacentPos).getTypeName() == "minecraft:redstone_block")
             ll::service::getLevel()->destroyBlock(blockSource, adjacentPos, isDrop); // 直接破坏方块，触发掉落逻辑
     }
@@ -183,24 +199,59 @@ void afterPlayerPlacedBlock(ll::event::PlayerPlacedBlockEvent& event) {
         else return; // 无法放置红石块
     }
 
+    BlockPos facingPos = pos.relative(facing.value(), 1);
     BlockPos targetPos = playerClickedPositions[uuid.asString()];
-    TaskManager::addTask(
-        [&blockSource, pos, &block, targetPos, isCreative]() {
-            getReadyToBreak(blockSource, pos, block, targetPos);
-            clearAllRedStoneNearby(blockSource, pos, !isCreative);
+    auto waitTicks = std::make_shared<int>(0);
+    const int MAX_WAIT_TICKS = 10;
 
-            // 这里我们嵌套一个Task
-            TaskManager::addTask(
-                [&blockSource, pos, isCreative]() {
-                    ll::service::getLevel()->destroyBlock(blockSource, pos, !isCreative); // 破坏活塞本身
-                },
-                4
-            );
-        },
-        3
+    TaskManager::addTask(
+        [&blockSource, facingPos, targetPos, pos, facing, waitTicks, &player, isCreative]() mutable {
+            std::string typeName = blockSource.getBlock(facingPos).getTypeName();
+            bool        hasPushed =
+                typeName == "minecraft:piston_arm_collision" || typeName == "minecraft:sticky_piston_arm_collision";
+
+            if (hasPushed) {
+                getReadyToBreak(blockSource, pos, blockSource.getBlock(pos), targetPos);
+                clearAllRedStoneNearby(blockSource, pos, false);
+
+                // 添加收回任务 (RetractTask)
+                TaskManager::addTask([&blockSource, targetPos, pos, isCreative]() {
+                    bool retracted = blockSource.getBlock(targetPos).isAir(); // 活塞已经收回的标志是原位置变成了空气
+                    if (retracted) {
+                        ll::service::getLevel()->destroyBlock(blockSource, pos, !isCreative);
+                    }
+                    return retracted; // 任务完成条件：活塞已经收回
+                });
+                return true;
+            }
+
+            // 超时处理
+            (*waitTicks)++;
+            if (*waitTicks >= MAX_WAIT_TICKS) {
+                std::optional<unsigned char> redstoneSlot = isCreative ? std::nullopt : getRedStoneFromInventory(player);
+                if (!isCreative && !redstoneSlot) {
+                    // 彻底失败：没有红石补给
+                    clearAllRedStoneNearby(blockSource, pos, true);
+                    ll::service::getLevel()->destroyBlock(blockSource, pos, true);
+                    return true; 
+                } else {
+                    // 尝试再次放置红石块
+                    if (getRedStoneBlockReady(blockSource, pos, facing.value())) {
+                        if (!isCreative) removeRedStoneItem(player, redstoneSlot.value());
+                        *waitTicks = 0; // 重置计数器，再给机会
+                        return false;
+                    } else {
+                        // 无法放置红石块，终止
+                        clearAllRedStoneNearby(blockSource, pos, true);
+                        ll::service::getLevel()->destroyBlock(blockSource, pos, true);
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
     );
-    // 目前这些数值都是手调的
-    // TODO：做检测式，而不是单纯的延时，确保在活塞完成旋转后再执行后续逻辑
 }
 
 }
