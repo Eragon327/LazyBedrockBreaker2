@@ -23,7 +23,7 @@
                 {
                     "type": "zip",
                     "urls": [
-                        "https://github.com/Eragon327/LazyBedrockBreaker2/releases/download/v1.0.0/LazyBedrockBreaker.zip"
+                        "{{tooth}}/releases/download/v{{version}}/LazyBedrockBreaker.zip"
                     ],
                     "placements": [
                         {
