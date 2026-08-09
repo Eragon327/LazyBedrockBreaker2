@@ -13,6 +13,7 @@
 #include "mc/world/level/BlockSource.h"
 #include "mc/world/level/GameType.h"
 #include "mc/world/level/block/Block.h"
+#include "mc/world/level/block/BlockChangeContext.h"
 #include "mc/world/level/dimension/Dimension.h"
 #include "mc/world/level/dimension/DimensionHeightRange.h"
 
@@ -84,7 +85,7 @@ std::optional<unsigned char> getPistonReady(BlockSource& blockSource, const Bloc
         optional_ref<const Block> newBlock   = Block ::tryGetFromRegistry(newTag);
         if (!newBlock) return std::nullopt;
 
-        blockSource.setBlock(pos, *newBlock, 3, nullptr, nullptr);
+        blockSource.setBlock(pos, *newBlock, 3, nullptr, nullptr, BlockChangeContext());
         return std::make_optional(newDirection.value());
     }
     return std::nullopt;
@@ -125,7 +126,8 @@ bool getRedStoneBlockReady(BlockSource& blockSource, const BlockPos& pos, unsign
                     Block::tryGetFromRegistry(HashedString("minecraft:redstone_block")),
                     3,
                     nullptr,
-                    nullptr
+                    nullptr,
+                    BlockChangeContext()
                 ))
                 return true;
         }
@@ -147,7 +149,7 @@ void getReadyToBreak(BlockSource& blockSource, const BlockPos& pos, const Block&
     CompoundTag newTag                   = nbtTag;
     newTag["states"]["facing_direction"] = IntTag(handleDirection(newDirectionValue));
     optional_ref<const Block> newBlock   = Block ::tryGetFromRegistry(newTag);
-    if (newBlock) blockSource.setBlock(pos, *newBlock, 3, nullptr, nullptr);
+    if (newBlock) blockSource.setBlock(pos, *newBlock, 3, nullptr, nullptr, BlockChangeContext());
 }
 
 void clearAllRedStoneNearby(BlockSource& blockSource, const BlockPos& pos, bool isDrop) {
@@ -156,7 +158,8 @@ void clearAllRedStoneNearby(BlockSource& blockSource, const BlockPos& pos, bool 
         BlockPos adjacentPos = pos.relative(i, 1);
         if (adjacentPos.y < heightRange.mMin || adjacentPos.y >= heightRange.mMax) continue; // 超出世界高度范围
         if (blockSource.getBlock(adjacentPos).getTypeName() == "minecraft:redstone_block")
-            ll::service::getLevel()->destroyBlock(blockSource, adjacentPos, isDrop); // 直接破坏方块，触发掉落逻辑
+            ll::service::getLevel()
+                ->destroyBlock(blockSource, adjacentPos, isDrop, BlockChangeContext()); // 直接破坏方块，触发掉落逻辑
     }
 }
 
@@ -225,7 +228,7 @@ void afterPlayerPlacedBlock(ll::event::PlayerPlacedBlockEvent& event) {
             TaskManager::addTask([&blockSource, targetPos, pos, isCreative]() {
                 bool retracted = blockSource.getBlock(targetPos).isAir(); // 活塞已经收回的标志是原位置变成了空气
                 if (retracted) {
-                    ll::service::getLevel()->destroyBlock(blockSource, pos, !isCreative);
+                    ll::service::getLevel()->destroyBlock(blockSource, pos, !isCreative, BlockChangeContext());
                 }
                 return retracted; // 任务完成条件：活塞已经收回
             });
@@ -239,7 +242,7 @@ void afterPlayerPlacedBlock(ll::event::PlayerPlacedBlockEvent& event) {
             if (!isCreative && !redstoneSlot) {
                 // 彻底失败：没有红石补给
                 clearAllRedStoneNearby(blockSource, pos, true);
-                ll::service::getLevel()->destroyBlock(blockSource, pos, true);
+                ll::service::getLevel()->destroyBlock(blockSource, pos, true, BlockChangeContext());
                 return true;
             } else {
                 // 尝试再次放置红石块
@@ -250,7 +253,7 @@ void afterPlayerPlacedBlock(ll::event::PlayerPlacedBlockEvent& event) {
                 } else {
                     // 无法放置红石块，终止
                     clearAllRedStoneNearby(blockSource, pos, true);
-                    ll::service::getLevel()->destroyBlock(blockSource, pos, true);
+                    ll::service::getLevel()->destroyBlock(blockSource, pos, true, BlockChangeContext());
                     return true;
                 }
             }
