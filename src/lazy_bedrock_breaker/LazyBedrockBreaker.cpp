@@ -1,86 +1,68 @@
 #include "LazyBedrockBreaker.h"
-#include "commands/Commands.h"
-#include "base/Mod.h"
-#include "base/Core.h"
-#include "base/Task.h"
-#include "ll/api/mod/RegisterHelper.h"
-#include "ll/api/memory/Hook.h"
+#include "Core.h"
+#include "ll/api/Config.h"
 #include "ll/api/event/EventBus.h"
 #include "ll/api/event/player/PlayerPlaceBlockEvent.h"
-#include "mc/world/level/Level.h"
-
-#include "mc/entity/systems/ActorLegacyTickSystem.h"
+#include "ll/api/mod/RegisterHelper.h"
 
 
 namespace lazy_bedrock_breaker {
+struct LazyBedrockBreaker::Impl {
+    config::Config                   mConfig;
+    std::set<ll::event::ListenerPtr> mEventListeners;
+};
 
-namespace {
-ll::event::ListenerPtr playerPlacingBlockEventListener;
-ll::event::ListenerPtr playerPlacedBlockEventListener;
-} // namespace
+LazyBedrockBreaker::LazyBedrockBreaker() : mImpl(std::make_unique<Impl>()), mSelf(*ll::mod::NativeMod::current()) {}
+
+LazyBedrockBreaker::~LazyBedrockBreaker() = default;
 
 LazyBedrockBreaker& LazyBedrockBreaker::getInstance() {
     static LazyBedrockBreaker instance;
     return instance;
 }
 
+config::Config& LazyBedrockBreaker::getConfig() { return mImpl->mConfig; }
+
+std::set<ll::event::ListenerPtr>& LazyBedrockBreaker::getEventListener() { return mImpl->mEventListeners; }
+
 bool LazyBedrockBreaker::load() {
-    // Initialize the player database.
-    const std::filesystem::path& playerDbPath = getSelf().getDataDir() / "players";
-    lazy_bedrock_breaker::mod().getPlayerDb() = std::make_unique<ll::data::KeyValueDB>(playerDbPath);
+    const auto& logger = getSelf().getLogger();
+    // load config
+    const auto& configFilePath = getSelf().getConfigDir() / "config.json";
+    auto&       config         = getConfig();
+    if (!ll::config::loadConfig(config, configFilePath)) {
+        logger.warn("Cannot load configurations from {}", configFilePath);
+        logger.info("Saving default configurations");
 
-    // Initialize the block database.
-    const std::filesystem::path& blockDbPath = getSelf().getDataDir() / "blocks";
-    lazy_bedrock_breaker::mod().getBlockDb() = std::make_unique<ll::data::KeyValueDB>(blockDbPath);
-
-    // Interact the block array with the block database.
-    ArrayManager& arrManager = lazy_bedrock_breaker::arr();
-    if (!arrManager.loadFromDB()) {
-        getSelf().getLogger().error("Failed to load block array from database.");
-        arrManager = ArrayManager(); // Reset to default state if loading fails.
+        if (!ll::config::saveConfig(config, configFilePath)) {
+            logger.error("Cannot save default configurations to {}", configFilePath);
+        }
     }
-    
-    return true;
-}
 
-bool LazyBedrockBreaker::enable() {
-    commands::registerBedrockBreakerCommand();
-    commands::registerBedrockBreakerMasterCommand();
+    getEventListener().emplace(
+        ll::event::EventBus::getInstance().emplaceListener<ll::event::PlayerPlacingBlockEvent>(
+            [](ll::event::PlayerPlacingBlockEvent& event) { core::onPlayerPlacingBlock(event); }
+        )
+    );
 
-    ll::event::EventBus& eventBus = ll::event::EventBus::getInstance();
-
-    playerPlacingBlockEventListener =
-        eventBus.emplaceListener<ll::event::PlayerPlacingBlockEvent>([](ll::event::PlayerPlacingBlockEvent &event) {
-            onPlayerPlacingBlock(event);
-        });
-
-    playerPlacedBlockEventListener =
-        eventBus.emplaceListener<ll::event::PlayerPlacedBlockEvent>([](ll::event::PlayerPlacedBlockEvent& event) {
-            afterPlayerPlacedBlock(event);
-        });
+    getEventListener().emplace(
+        ll::event::EventBus::getInstance().emplaceListener<ll::event::PlayerPlacedBlockEvent>(
+            [](ll::event::PlayerPlacedBlockEvent& event) { core::afterPlayerPlacedBlock(event); }
+        )
+    );
 
     return true;
 }
 
-bool LazyBedrockBreaker::disable() {
-    getSelf().getLogger().debug("Disabling...");
-    // Code for disabling the mod goes here.
+bool LazyBedrockBreaker::enable() { return true; }
 
-    ll::event::EventBus& eventBus = ll::event::EventBus::getInstance();
+bool LazyBedrockBreaker::disable() { return true; }
 
-    eventBus.removeListener(playerPlacingBlockEventListener);
-    eventBus.removeListener(playerPlacedBlockEventListener);
-
+bool LazyBedrockBreaker::unload() {
+    getEventListener().clear();
     return true;
-}
-
-LL_AUTO_TYPE_INSTANCE_HOOK(TickHook, HookPriority::Normal, Level, &Level::$tick, void) {
-    origin();
-    TaskManager::tick(); // TaskManager是静态类
-    clearMap();
 }
 
 } // namespace lazy_bedrock_breaker
 
 LL_REGISTER_MOD(lazy_bedrock_breaker::LazyBedrockBreaker, lazy_bedrock_breaker::LazyBedrockBreaker::getInstance());
-

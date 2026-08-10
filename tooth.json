@@ -1,39 +1,54 @@
 {
     "format_version": 3,
     "format_uuid": "289f771f-2c9a-4d73-9f3f-8492495a924d",
-    "tooth": "https://github.com/Eragon327/LazyBedrockBreaker2",
-    "version": "1.3.0",
+    "tooth": "github.com/LiteLDev/levilamina-mod-template",
+    "version": "0.0.0",
     "info": {
         "name": "LazyBedrockBreaker",
-        "description": "A bedrock breaker helper for Minecraft Bedrock Edition",
+        "description": "Description of my mod",
         "tags": [
             "platform:levilamina",
             "type:mod"
-        ],
-        "avatar_url": ""
+        ]
     },
     "variants": [
         {
-            "label": "server",
+            "label": "",
             "platform": "win-x64",
             "dependencies": {
-                "github.com/LiteLDev/LeviLamina": "1.5.*"
+                "github.com/LiteLDev/LeviLamina": "26.20.*"
             },
-            "assets": [
-                {
-                    "type": "zip",
-                    "urls": [
-                        "{{tooth}}/releases/download/v{{version}}/LazyBedrockBreaker.zip"
-                    ],
-                    "placements": [
-                        {
-                            "type": "dir",
-                            "src": "LazyBedrockBreaker/",
-                            "dest": "plugins/LazyBedrockBreaker/"
-                        }
-                    ]
-                }
-            ]
+            "preserve_files": [],
+            "remove_files": [],
+            "scripts": {
+                "pre_install": [],
+                "install": [],
+                "post_install": [],
+                "pre_pack": [],
+                "post_pack": [],
+                "pre_uninstall": [],
+                "uninstall": [],
+                "post_uninstall": []
+            }
+        },
+        {
+            "label": "client",
+            "platform": "win-x64",
+            "dependencies": {
+                "github.com/LiteLDev/LeviLamina#client": "26.20.*"
+            },
+            "preserve_files": [],
+            "remove_files": [],
+            "scripts": {
+                "pre_install": [],
+                "install": [],
+                "post_install": [],
+                "pre_pack": [],
+                "post_pack": [],
+                "pre_uninstall": [],
+                "uninstall": [],
+                "post_uninstall": []
+            }
         }
     ]
 }

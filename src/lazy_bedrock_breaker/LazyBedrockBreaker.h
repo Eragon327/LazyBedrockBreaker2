@@ -1,15 +1,25 @@
 #pragma once
 
+#include "Config.h"
+#include "ll/api/event/ListenerBase.h"
 #include "ll/api/mod/NativeMod.h"
+#include <memory>
+
 
 namespace lazy_bedrock_breaker {
 
 class LazyBedrockBreaker {
+    struct Impl;
+    std::unique_ptr<Impl> mImpl;
 
 public:
+    LazyBedrockBreaker();
+    ~LazyBedrockBreaker();
+
     static LazyBedrockBreaker& getInstance();
 
-    LazyBedrockBreaker() : mSelf(*ll::mod::NativeMod::current()) {}
+    [[nodiscard]] config::Config& getConfig();
+    [[nodiscard]] std::set<ll::event::ListenerPtr>& getEventListener();
 
     [[nodiscard]] ll::mod::NativeMod& getSelf() const { return mSelf; }
 
@@ -22,9 +32,8 @@ public:
     /// @return True if the mod is disabled successfully.
     bool disable();
 
-    // TODO: Implement this method if you need to unload the mod.
     /// @return True if the mod is unloaded successfully.
-    // bool unload();
+    bool unload();
 
 private:
     ll::mod::NativeMod& mSelf;
